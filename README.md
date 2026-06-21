@@ -1,6 +1,6 @@
 # Hyperfocus
 
-A terminal UI project launcher and scaffolder — browse, create, and switch between your development projects with fuzzy search, mouse support, and per-project tmux launch scripts.
+A terminal UI project launcher and scaffolder - browse, create, and switch between your development projects with fuzzy search, mouse support, and per-project tmux launch scripts.
 
 ![screenshot](screenshot.png)
 
@@ -8,29 +8,29 @@ A terminal UI project launcher and scaffolder — browse, create, and switch bet
 
 **Runtime:**
 
-- [`tmux`](https://github.com/tmux/tmux) — session management
-- [`bash`](https://www.gnu.org/software/bash/) — launch script execution
-- [`git`](https://git-scm.com/) — initialised in every new project
+- [`tmux`](https://github.com/tmux/tmux) - session management
+- [`bash`](https://www.gnu.org/software/bash/) - launch script execution
+- [`git`](https://git-scm.com/) - initialised in every new project
 
 **Optional (for scaffolding new projects):**
 
-- Python projects — [`uv`](https://docs.astral.sh/uv/)
-- JS/TS projects — [`Node.js`](https://nodejs.org/) + [`npm`](https://www.npmjs.com/)
+- Python projects - [`uv`](https://docs.astral.sh/uv/)
+- JS/TS projects - [`Node.js`](https://nodejs.org/) + [`npm`](https://www.npmjs.com/)
 
 **Build:**
 
-- [Go](https://go.dev/) 1.22+
+- [Go](https://go.dev/) 1.26+
 
 ## Install
 
 ```bash
-go install github.com/yourusername/hyperfocus@latest
+go install github.com/mikkelrask/hyperfocus@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/yourusername/hyperfocus ~/Repos/hf
+git clone https://github.com/mikkelrask/hyperfocus ~/Repos/hf
 cd ~/Repos/hf
 go build -o hf .
 cp hf ~/.local/bin/    # or anywhere on your $PATH
@@ -82,8 +82,8 @@ Registers the repo with Hyperfocus and creates a default launch script at `~/.hf
 
 Press `Ctrl+n` in the TUI and follow the wizard:
 
-1. **Project name** — alphanumeric, hyphens, underscores, dots
-2. **Type** — Python or JavaScript / TypeScript
+1. **Project name** - alphanumeric, hyphens, underscores, dots
+2. **Type** - Python or JavaScript / TypeScript
 3. **Framework** (JS/TS only):
    - Next.js
    - Vite + React
@@ -102,7 +102,7 @@ Each project gets a shell script at:
 ~/.hf/projects/<name>/launch.sh
 ```
 
-When you open a project from the TUI, this script runs. The default opens a tmux session with `nvim` in the top pane and a shell in the bottom — the same layout as a classic fzf-based switcher.
+When you open a project from the TUI, this script runs. The default opens a tmux session with `nvim` in the top pane and a shell in the bottom - the same layout as a classic fzf-based switcher.
 
 Edit the script per project to customise the tmux layout (e.g. open a dev server in a second window, launch tests, etc.). Use `Ctrl+e` inside the TUI to jump straight to the editor.
 
@@ -125,8 +125,8 @@ cd ~/Repos/hf
 go build -o hf .
 ```
 
-The binary is standalone — it only needs `~/.hf/` at runtime and the external tools listed under Dependencies.
+The binary is standalone - it only needs `~/.hf/` at runtime and the external tools listed under Dependencies.
 
 ## License
 
-MIT
+BEER-WARE
