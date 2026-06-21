@@ -264,7 +264,7 @@ func (m model) handleListMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	y := msg.Y
 	// ── Layout (approximate):
 	//   0:  "" (padding top, 1 row)
-	//   1:  "🔍 Hyperfocus" (header)
+	//   1:  "🗃️ HYPERFOCUS" (header)
 	//   2:  "Search: …" (search)
 	//   3:  "" (blank after search)
 	//   4+: items (3 rows each: name, desc, blank)
