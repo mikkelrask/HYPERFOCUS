@@ -26,9 +26,18 @@ A terminal UI project launcher and scaffolder - browse, create, and switch betwe
 ```bash
 go install github.com/mikkelrask/hyperfocus@latest
 ```
+If ~/go/bin is not in your path, you can add it _or_ symlink the binary to a path that is.
 
-Or build from source:
+```bash
+# Add to $PATH
+PATH="$PATH:$HOME/go/bin"
+# OR symlink the binary
+ln -s $HOME/go/bin/hyperfocus $HOME/.local/bin/hf
+```
 
+This lets you invoke it with `hf`
+### Build from source:
+It can also be installed by building from source:
 ```bash
 git clone https://github.com/mikkelrask/hyperfocus ~/Repos/hf
 cd ~/Repos/hf
