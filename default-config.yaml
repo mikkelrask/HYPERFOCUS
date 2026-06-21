@@ -1,0 +1,95 @@
+# Hyperfocus default configuration.
+# Copy this to ~/.hf/config.yaml and edit to add your own languages/frameworks.
+# User config is merged with — and overrides — these defaults by language name.
+
+languages:
+  - name: python
+    label: Python
+    detect:
+      - pyproject.toml
+      - setup.py
+      - setup.cfg
+      - requirements.txt
+      - Pipfile
+    frameworks:
+      - name: uv
+        label: uv
+        create: ["uv", "init", "{name}"]
+
+  - name: javascript
+    label: JavaScript / TypeScript
+    detect:
+      - package.json
+    frameworks:
+      - name: nextjs
+        label: Next.js
+        create:
+          - npx
+          - "--yes"
+          - create-next-app@latest
+          - "{name}"
+          - "--ts"
+          - "--eslint"
+          - "--app"
+          - "--no-src-dir"
+          - "--import-alias"
+          - "@/*"
+          - "--use-npm"
+          - "--no-tailwind"
+
+      - name: vite-react
+        label: Vite + React
+        create:
+          - npx
+          - "--yes"
+          - create-vite@latest
+          - "{name}"
+          - "--template"
+          - react-ts
+        post_create:
+          - ["npm", "install"]
+
+      - name: vite-vue
+        label: Vite + Vue
+        create:
+          - npx
+          - "--yes"
+          - create-vite@latest
+          - "{name}"
+          - "--template"
+          - vue-ts
+        post_create:
+          - ["npm", "install"]
+
+      - name: vite-svelte
+        label: Vite + Svelte
+        create:
+          - npx
+          - "--yes"
+          - create-vite@latest
+          - "{name}"
+          - "--template"
+          - svelte-ts
+        post_create:
+          - ["npm", "install"]
+
+      - name: astro
+        label: Astro
+        create:
+          - npx
+          - "--yes"
+          - create-astro@latest
+          - "{name}"
+          - "--template"
+          - basics
+          - "--typescript"
+          - strict
+          - "--no-git"
+        post_create:
+          - ["npm", "install"]
+
+      - name: plain
+        label: Plain npm
+        create: ["mkdir", "-p", "{name}"]
+        post_create:
+          - ["npm", "init", "-y"]

@@ -47,6 +47,9 @@ type createResultMsg struct {
 type model struct {
 	screen screen
 
+	// Config (languages & frameworks)
+	config *Config
+
 	// Project registry
 	projects []Project
 	filtered []Project
@@ -57,11 +60,16 @@ type model struct {
 
 	// Create wizard
 	createName string
-	createType ProjectType
-	createFW   Framework
+	createType string // language name, e.g. "python"
+	createFW   string // framework name, e.g. "vite-react"
 	nameInput  textinput.Model
 	typeCursor int
 	fwCursor   int
+
+	// Cached options (derived from config so we don't recompute every frame)
+	typeOptions   []LanguageConfig
+	fwOptions     []FrameworkConfig
+	currentFwOpts []FrameworkConfig // frameworks for the currently selected language
 
 	// Running scaffolding
 	creating       bool
@@ -79,18 +87,6 @@ type model struct {
 	// Post-TUI action
 	openProject string
 }
-
-var (
-	typeOptions = []ProjectType{TypePython, TypeJSTS}
-	fwOptions   = []Framework{
-		FrameworkNextJS,
-		FrameworkViteReact,
-		FrameworkViteVue,
-		FrameworkViteSvelte,
-		FrameworkAstro,
-		FrameworkPlainNPM,
-	}
-)
 
 // ── Constructor ──────────────────────────────────────────────────────────
 
@@ -123,18 +119,32 @@ func newModel() model {
 		projects = []Project{}
 	}
 
+	cfg, _ := LoadConfig()
+	typeOpts := cfg.Languages
+
+	// Pre-populate fwOptions with first language's frameworks
+	var fwOpts []FrameworkConfig
+	if len(typeOpts) > 0 {
+		fwOpts = typeOpts[0].Frameworks
+	}
+
 	return model{
-		screen:      screenList,
-		projects:    projects,
-		filtered:    projects,
-		cursor:      0,
-		searchInput: si,
-		nameInput:   ni,
-		pathInput:   pi,
-		spinner:     s,
-		createType:  TypePython,
-		typeCursor:  0,
-		fwCursor:    0,
+		screen:        screenList,
+		config:        cfg,
+		projects:      projects,
+		filtered:      projects,
+		cursor:        0,
+		searchInput:   si,
+		nameInput:     ni,
+		pathInput:     pi,
+		spinner:       s,
+		createType:    "",
+		createFW:      "",
+		typeCursor:    0,
+		fwCursor:      0,
+		typeOptions:   typeOpts,
+		fwOptions:     fwOpts,
+		currentFwOpts: fwOpts,
 	}
 }
 
@@ -395,20 +405,34 @@ func (m model) handleCreateTypeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.typeCursor > 0 {
 			m.typeCursor--
 		}
+		// Update framework options for the newly selected language
+		lang := m.typeOptions[m.typeCursor]
+		m.fwOptions = lang.Frameworks
+		m.fwCursor = 0
 		return m, nil
 	case "down", "j":
-		if m.typeCursor < len(typeOptions)-1 {
+		if m.typeCursor < len(m.typeOptions)-1 {
 			m.typeCursor++
 		}
+		// Update framework options for the newly selected language
+		lang := m.typeOptions[m.typeCursor]
+		m.fwOptions = lang.Frameworks
+		m.fwCursor = 0
 		return m, nil
 	case "enter":
-		m.createType = typeOptions[m.typeCursor]
-		if m.createType == TypeJSTS {
-			m.screen = screenCreateFramework
+		m.createType = m.typeOptions[m.typeCursor].Name
+		m.createFW = ""
+		// If the language has multiple frameworks, show the framework picker
+		if len(m.typeOptions[m.typeCursor].Frameworks) > 1 {
+			m.fwOptions = m.typeOptions[m.typeCursor].Frameworks
 			m.fwCursor = 0
+			m.screen = screenCreateFramework
 			return m, nil
 		}
-		// Python → create directly
+		// Single framework (or none) → skip straight to creation
+		if len(m.typeOptions[m.typeCursor].Frameworks) == 1 {
+			m.createFW = m.typeOptions[m.typeCursor].Frameworks[0].Name
+		}
 		return m.startCreate()
 	case "esc":
 		m.screen = screenCreateName
@@ -428,12 +452,12 @@ func (m model) handleCreateFrameworkKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "down", "j":
-		if m.fwCursor < len(fwOptions)-1 {
+		if m.fwCursor < len(m.fwOptions)-1 {
 			m.fwCursor++
 		}
 		return m, nil
 	case "enter":
-		m.createFW = fwOptions[m.fwCursor]
+		m.createFW = m.fwOptions[m.fwCursor].Name
 		return m.startCreate()
 	case "esc":
 		m.screen = screenCreateType
@@ -459,12 +483,12 @@ func (m model) startCreate() (tea.Model, tea.Cmd) {
 	m.createResult = nil
 	m.createdProject = Project{}
 
+	cfg := m.config
 	return m, tea.Batch(
 		m.spinner.Tick,
 		func() tea.Msg {
-			err := scaffoldProject(project)
+			err := scaffoldProject(project, cfg)
 			if err != nil {
-				// Clean up the project from registry if it was saved mid-scaffold
 				return createResultMsg{project: project, err: err}
 			}
 			// Save to registry only on success

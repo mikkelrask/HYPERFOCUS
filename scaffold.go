@@ -5,11 +5,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
-// ── Scaffolding ──────────────────────────────────────────────────────────
+// ── Scaffolding (config-driven) ──────────────────────────────────────────
 
-func scaffoldProject(p Project) error {
+func scaffoldProject(p Project, cfg *Config) error {
 	repos := expandPath("~/Repos")
 	if err := os.MkdirAll(repos, 0755); err != nil {
 		return fmt.Errorf("cannot create ~/Repos: %w", err)
@@ -17,25 +18,58 @@ func scaffoldProject(p Project) error {
 
 	projectPath := filepath.Join(repos, p.Name)
 
-	switch p.Type {
-	case TypePython:
-		if err := scaffoldPython(p, repos); err != nil {
-			return err
-		}
-	case TypeJSTS:
-		if err := scaffoldJSTS(p, repos); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("unknown project type")
+	// Look up the language in config
+	lang := cfg.FindLanguage(p.Type)
+	if lang == nil {
+		return fmt.Errorf("unknown language %q — check ~/.hf/config.yaml", p.Type)
 	}
 
-	// git init
+	// Find the framework (or use first one if none specified)
+	var fw *FrameworkConfig
+	if p.Framework != "" {
+		fw = lang.FindFramework(p.Framework)
+		if fw == nil {
+			return fmt.Errorf("unknown framework %q for language %q", p.Framework, p.Type)
+		}
+	} else if len(lang.Frameworks) > 0 {
+		fw = &lang.Frameworks[0]
+	} else {
+		return fmt.Errorf("no frameworks defined for language %q", p.Type)
+	}
+
+	// Create / scaffold command
+	if len(fw.Create) > 0 {
+		args := substitute(fw.Create, p.Name, repos, projectPath)
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repos
+		cmd.Stdin = nil
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("scaffold command failed: %w\n%s", err, string(out))
+		}
+	}
+
+	// Post-create steps (npm install, etc.)
+	for _, step := range fw.PostCreate {
+		if len(step) == 0 {
+			continue
+		}
+		args := substitute(step, p.Name, repos, projectPath)
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = projectPath
+		cmd.Stdin = nil
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("post-create step failed: %w\n%s", err, string(out))
+		}
+	}
+
+	// git init (always)
 	if err := runGitInit(projectPath); err != nil {
 		return err
 	}
 
-	// Create launch script
+	// Launch script
 	if err := createLaunchScript(p); err != nil {
 		return fmt.Errorf("project created but launch script failed: %w", err)
 	}
@@ -43,118 +77,16 @@ func scaffoldProject(p Project) error {
 	return nil
 }
 
-func scaffoldPython(p Project, repos string) error {
-	cmd := exec.Command("uv", "init", p.Name)
-	cmd.Dir = repos
-	cmd.Stdin = nil
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("uv init failed: %w\n%s", err, string(out))
+// substitute replaces {name}, {project_path}, {repos_path} in command arguments.
+func substitute(args []string, name, reposPath, projectPath string) []string {
+	out := make([]string, len(args))
+	for i, a := range args {
+		a = strings.ReplaceAll(a, "{name}", name)
+		a = strings.ReplaceAll(a, "{project_path}", projectPath)
+		a = strings.ReplaceAll(a, "{repos_path}", reposPath)
+		out[i] = a
 	}
-	return nil
-}
-
-func scaffoldJSTS(p Project, repos string) error {
-	switch p.Framework {
-	case FrameworkNextJS:
-		return scaffoldNextJS(p, repos)
-	case FrameworkViteReact:
-		return scaffoldVite(p, repos, "react-ts")
-	case FrameworkViteVue:
-		return scaffoldVite(p, repos, "vue-ts")
-	case FrameworkViteSvelte:
-		return scaffoldVite(p, repos, "svelte-ts")
-	case FrameworkAstro:
-		return scaffoldAstro(p, repos)
-	case FrameworkPlainNPM:
-		return scaffoldPlainNPM(p, repos)
-	default:
-		return fmt.Errorf("unknown JS/TS framework")
-	}
-}
-
-func scaffoldNextJS(p Project, repos string) error {
-	args := []string{
-		"--yes",
-		"create-next-app@latest",
-		p.Name,
-		"--ts",
-		"--eslint",
-		"--app",
-		"--no-src-dir",
-		"--import-alias", "@/*",
-		"--use-npm",
-		"--no-tailwind",
-	}
-	cmd := exec.Command("npx", args...)
-	cmd.Dir = repos
-	cmd.Stdin = nil
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("create-next-app failed: %w\n%s", err, string(out))
-	}
-	return nil
-}
-
-func scaffoldVite(p Project, repos, template string) error {
-	cmd := exec.Command("npx", "--yes", "create-vite@latest", p.Name, "--template", template)
-	cmd.Dir = repos
-	cmd.Stdin = nil
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("create-vite failed: %w\n%s", err, string(out))
-	}
-
-	// npm install
-	projectPath := filepath.Join(repos, p.Name)
-	install := exec.Command("npm", "install")
-	install.Dir = projectPath
-	install.Stdin = nil
-	out, err = install.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("npm install failed: %w\n%s", err, string(out))
-	}
-	return nil
-}
-
-func scaffoldAstro(p Project, repos string) error {
-	cmd := exec.Command("npx", "--yes", "create-astro@latest", p.Name,
-		"--template", "basics",
-		"--typescript", "strict",
-		"--no-git",
-	)
-	cmd.Dir = repos
-	cmd.Stdin = nil
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("create-astro failed: %w\n%s", err, string(out))
-	}
-
-	// npm install
-	projectPath := filepath.Join(repos, p.Name)
-	install := exec.Command("npm", "install")
-	install.Dir = projectPath
-	install.Stdin = nil
-	out, err = install.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("npm install failed: %w\n%s", err, string(out))
-	}
-	return nil
-}
-
-func scaffoldPlainNPM(p Project, repos string) error {
-	projectPath := filepath.Join(repos, p.Name)
-	if err := os.MkdirAll(projectPath, 0755); err != nil {
-		return err
-	}
-	cmd := exec.Command("npm", "init", "-y")
-	cmd.Dir = projectPath
-	cmd.Stdin = nil
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("npm init failed: %w\n%s", err, string(out))
-	}
-	return nil
+	return out
 }
 
 func runGitInit(projectPath string) error {
@@ -174,6 +106,13 @@ func createLaunchScript(p Project) error {
 	dir := projectScriptDir(p.Name)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
+	}
+
+	// Load config for display labels
+	cfg, _ := LoadConfig()
+	desc := p.Type
+	if cfg != nil {
+		desc = cfg.Describe(p.Type, p.Framework)
 	}
 
 	script := fmt.Sprintf(`#!/usr/bin/env bash
@@ -224,7 +163,7 @@ if [ -n "$TMUX" ]; then
 else
     tmux attach-session -t "$SESSION_NAME"
 fi
-`, p.Name, p.Type.String(), p.Path, p.Path, p.Name)
+`, p.Name, desc, p.Path, p.Path, p.Name)
 
 	path := projectLaunchScript(p.Name)
 	return os.WriteFile(path, []byte(script), 0755)

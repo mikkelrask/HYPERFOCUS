@@ -10,60 +10,12 @@ import (
 
 // ── Types ────────────────────────────────────────────────────────────────
 
-type ProjectType int
-
-const (
-	TypePython ProjectType = iota
-	TypeJSTS
-	TypeUnknown
-)
-
-func (pt ProjectType) String() string {
-	switch pt {
-	case TypePython:
-		return "Python"
-	case TypeJSTS:
-		return "JS/TS"
-	default:
-		return "Unknown"
-	}
-}
-
-type Framework int
-
-const (
-	FrameworkNone Framework = iota
-	FrameworkNextJS
-	FrameworkViteReact
-	FrameworkViteVue
-	FrameworkViteSvelte
-	FrameworkAstro
-	FrameworkPlainNPM
-)
-
-var frameworkNames = map[Framework]string{
-	FrameworkNone:       "",
-	FrameworkNextJS:     "Next.js",
-	FrameworkViteReact:  "Vite + React",
-	FrameworkViteVue:    "Vite + Vue",
-	FrameworkViteSvelte: "Vite + Svelte",
-	FrameworkAstro:      "Astro",
-	FrameworkPlainNPM:   "Plain npm",
-}
-
-func (f Framework) String() string {
-	if s, ok := frameworkNames[f]; ok {
-		return s
-	}
-	return "?"
-}
-
 type Project struct {
-	Name      string      `json:"name"`
-	Type      ProjectType `json:"type"`
-	Framework Framework   `json:"framework"`
-	Path      string      `json:"path"`
-	CreatedAt time.Time   `json:"created_at"`
+	Name      string    `json:"name"`
+	Type      string    `json:"type"`      // language name, e.g. "python", "javascript"
+	Framework string    `json:"framework"` // framework name, e.g. "uv", "vite-react"
+	Path      string    `json:"path"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // ── Path helpers ─────────────────────────────────────────────────────────
@@ -87,6 +39,23 @@ func projectLaunchScript(name string) string {
 
 // ── Persistence ──────────────────────────────────────────────────────────
 
+// Legacy mapping for projects.json files that used integer enums.
+var legacyTypeMap = map[int]string{
+	0: "python",
+	1: "javascript",
+	2: "unknown",
+}
+
+var legacyFwMap = map[int]string{
+	0: "",
+	1: "nextjs",
+	2: "vite-react",
+	3: "vite-vue",
+	4: "vite-svelte",
+	5: "astro",
+	6: "plain",
+}
+
 func loadProjects() ([]Project, error) {
 	path := projectsFilePath()
 	data, err := os.ReadFile(path)
@@ -96,13 +65,40 @@ func loadProjects() ([]Project, error) {
 		}
 		return nil, err
 	}
+
+	// Try new string-based format first
 	var projects []Project
-	if err := json.Unmarshal(data, &projects); err != nil {
-		return nil, err
+	if err := json.Unmarshal(data, &projects); err == nil {
+		if projects == nil {
+			return []Project{}, nil
+		}
+		return projects, nil
 	}
-	if projects == nil {
-		return []Project{}, nil
+
+	// Fallback: legacy integer-based format → migrate
+	var legacy []struct {
+		Name      string    `json:"name"`
+		Type      int       `json:"type"`
+		Framework int       `json:"framework"`
+		Path      string    `json:"path"`
+		CreatedAt time.Time `json:"created_at"`
 	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return nil, fmt.Errorf("reading projects.json: %w", err)
+	}
+
+	for _, l := range legacy {
+		projects = append(projects, Project{
+			Name:      l.Name,
+			Type:      legacyTypeMap[l.Type],
+			Framework: legacyFwMap[l.Framework],
+			Path:      l.Path,
+			CreatedAt: l.CreatedAt,
+		})
+	}
+
+	// Persist migrated data
+	_ = saveProjects(projects)
 	return projects, nil
 }
 
@@ -139,7 +135,7 @@ func adoptProject(path string) error {
 		path = filepath.Join(home, path[1:])
 	}
 
-	// Resolve to absolute path FIRST so filepath.Base works for ".", "..", etc.
+	// Resolve to absolute path first so filepath.Base works for ".", ".." etc.
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return fmt.Errorf("cannot resolve path %s: %w", path, err)
@@ -168,10 +164,17 @@ func adoptProject(path string) error {
 		}
 	}
 
+	// Try to auto-detect the language from project files
+	cfg, _ := LoadConfig()
+	lang := "unknown"
+	if cfg != nil {
+		lang = DetectLanguage(absPath, cfg)
+	}
+
 	project := Project{
 		Name:      name,
-		Type:      TypeUnknown,
-		Framework: FrameworkNone,
+		Type:      lang,
+		Framework: "",
 		Path:      absPath,
 		CreatedAt: time.Now(),
 	}

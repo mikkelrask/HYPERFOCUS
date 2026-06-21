@@ -158,10 +158,7 @@ func (m model) listView() string {
 			b.WriteString(prefix + nameStr + "\n")
 
 			// Description
-			desc := p.Type.String()
-			if p.Framework != FrameworkNone {
-				desc += " — " + p.Framework.String()
-			}
+			desc := m.config.Describe(p.Type, p.Framework)
 			if selected {
 				b.WriteString("   " + selectedDescStyle.Render(desc) + "\n")
 			} else {
@@ -204,7 +201,7 @@ func (m model) createTypeView() string {
 	b.WriteString(fmt.Sprintf("  Project: %s\n\n", projectNameStyle.Render(m.createName)))
 	b.WriteString("  Select project type:\n\n")
 
-	for i, pt := range typeOptions {
+	for i, lang := range m.typeOptions {
 		selected := i == m.typeCursor
 		radio := radioUnselected.String()
 		prefix := "  "
@@ -213,7 +210,7 @@ func (m model) createTypeView() string {
 			prefix = cursorIndicator.String()
 		}
 
-		label := pt.String()
+		label := lang.Label
 		if selected {
 			label = selectedNameStyle.Render(label)
 		}
@@ -234,10 +231,11 @@ func (m model) createFrameworkView() string {
 	b.WriteString(titleStyle.Render("📦 New Project — Framework"))
 	b.WriteString("\n\n")
 	b.WriteString(fmt.Sprintf("  Project: %s\n", projectNameStyle.Render(m.createName)))
-	b.WriteString(fmt.Sprintf("  Type:   %s\n\n", selectedDescStyle.Render("JS/TS")))
+	langLabel := m.config.LanguageLabel(m.createType)
+	b.WriteString(fmt.Sprintf("  Type:   %s\n\n", selectedDescStyle.Render(langLabel)))
 	b.WriteString("  Select framework:\n\n")
 
-	for i, fw := range fwOptions {
+	for i, fw := range m.fwOptions {
 		selected := i == m.fwCursor
 		radio := radioUnselected.String()
 		prefix := "  "
@@ -246,7 +244,7 @@ func (m model) createFrameworkView() string {
 			prefix = cursorIndicator.String()
 		}
 
-		label := fw.String()
+		label := fw.Label
 		if selected {
 			label = selectedNameStyle.Render(label)
 		}
@@ -267,9 +265,9 @@ func (m model) creatingView() string {
 	b.WriteString(titleStyle.Render("📦 Creating Project"))
 	b.WriteString("\n\n")
 	b.WriteString(fmt.Sprintf("  %s Scaffolding %s…\n\n", m.spinner.View(), projectNameStyle.Render(m.createName)))
-	b.WriteString(fmt.Sprintf("  Type:      %s\n", m.createType.String()))
-	if m.createFW != FrameworkNone {
-		b.WriteString(fmt.Sprintf("  Framework: %s\n", m.createFW.String()))
+	b.WriteString(fmt.Sprintf("  Type:      %s\n", m.config.LanguageLabel(m.createType)))
+	if m.createFW != "" {
+		b.WriteString(fmt.Sprintf("  Framework: %s\n", m.config.FrameworkLabel(m.createType, m.createFW)))
 	}
 	b.WriteString(fmt.Sprintf("  Location:  ~/Repos/%s\n", m.createName))
 	b.WriteString("\n")
@@ -293,9 +291,9 @@ func (m model) createDoneView() string {
 		b.WriteString(titleStyle.Render("✅ Project Created"))
 		b.WriteString("\n\n")
 		b.WriteString(fmt.Sprintf("  %s %s\n\n", successStyle.Render("✓"), projectNameStyle.Render(m.createdProject.Name)))
-		b.WriteString(fmt.Sprintf("  Type:      %s\n", m.createdProject.Type.String()))
-		if m.createdProject.Framework != FrameworkNone {
-			b.WriteString(fmt.Sprintf("  Framework: %s\n", m.createdProject.Framework.String()))
+		b.WriteString(fmt.Sprintf("  Type:      %s\n", m.config.LanguageLabel(m.createdProject.Type)))
+		if m.createdProject.Framework != "" {
+			b.WriteString(fmt.Sprintf("  Framework: %s\n", m.config.FrameworkLabel(m.createdProject.Type, m.createdProject.Framework)))
 		}
 		b.WriteString(fmt.Sprintf("  Location:  ~/Repos/%s\n", m.createdProject.Name))
 		b.WriteString(fmt.Sprintf("  Git:       initialized\n"))
