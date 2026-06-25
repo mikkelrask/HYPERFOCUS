@@ -11,11 +11,12 @@ import (
 
 func main() {
 	adoptPath := flag.String("adopt", "", "Adopt an existing repository at the given path")
+	adoptName := flag.String("name", "", "Display name for the adopted project (default: directory name)")
 	flag.Parse()
 
 	// ── CLI: adopt an existing repo ─────────────────────────────────────
 	if *adoptPath != "" {
-		err := adoptProject(*adoptPath)
+		err := adoptProject(*adoptPath, *adoptName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)

@@ -115,6 +115,8 @@ func (m model) View() string {
 		content = m.createDoneView()
 	case screenAdopt:
 		content = m.adoptView()
+	case screenAdoptName:
+		content = m.adoptNameView()
 	}
 
 	return docStyle.Render(content)
@@ -313,7 +315,19 @@ func (m model) adoptView() string {
 	b.WriteString("\n\n")
 	b.WriteString("  Enter the path to an existing repository:\n\n")
 	b.WriteString("  " + m.pathInput.View() + "\n\n")
-	b.WriteString(footerStyle.Render("  [Enter] Adopt  [Esc] Cancel"))
+	b.WriteString(footerStyle.Render("  [Tab] Complete path  [Enter] Continue  [Esc] Cancel"))
+	b.WriteString("\n")
+	return b.String()
+}
+
+func (m model) adoptNameView() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("📂 Adopt — Project Name"))
+	b.WriteString("\n\n")
+	b.WriteString(projectDescStyle.Render("  Path: "+m.adoptPath) + "\n\n")
+	b.WriteString("  Enter a display name (leave empty to use directory name):\n\n")
+	b.WriteString("  " + m.adoptNameInput.View() + "\n\n")
+	b.WriteString(footerStyle.Render("  [Enter] Adopt  [Esc] Back to path"))
 	b.WriteString("\n")
 	return b.String()
 }

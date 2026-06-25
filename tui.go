@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -33,6 +35,7 @@ const (
 	screenCreating
 	screenCreateDone
 	screenAdopt
+	screenAdoptName
 )
 
 // ── Messages ─────────────────────────────────────────────────────────────
@@ -78,7 +81,12 @@ type model struct {
 	spinner        spinner.Model
 
 	// Adopt
-	pathInput textinput.Model
+	pathInput         textinput.Model
+	adoptPath         string // resolved absolute path, set after path entry
+	adoptDetectedName string // directory name, shown as default
+	adoptNameInput    textinput.Model
+	adoptTabMatches   []string // path completion candidates
+	adoptTabIdx       int      // index into adoptTabMatches
 
 	// Terminal
 	width, height int
@@ -110,6 +118,12 @@ func newModel() model {
 	pi.Width = 50
 	pi.CharLimit = 256
 
+	ani := textinput.New()
+	ani.Placeholder = "my-project"
+	ani.Prompt = "Name: "
+	ani.Width = 40
+	ani.CharLimit = 64
+
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#7C3AED"))
@@ -129,22 +143,25 @@ func newModel() model {
 	}
 
 	return model{
-		screen:        screenList,
-		config:        cfg,
-		projects:      projects,
-		filtered:      projects,
-		cursor:        0,
-		searchInput:   si,
-		nameInput:     ni,
-		pathInput:     pi,
-		spinner:       s,
-		createType:    "",
-		createFW:      "",
-		typeCursor:    0,
-		fwCursor:      0,
-		typeOptions:   typeOpts,
-		fwOptions:     fwOpts,
-		currentFwOpts: fwOpts,
+		screen:          screenList,
+		config:          cfg,
+		projects:        projects,
+		filtered:        projects,
+		cursor:          0,
+		searchInput:     si,
+		nameInput:       ni,
+		pathInput:       pi,
+		adoptNameInput:  ani,
+		adoptTabMatches: nil,
+		adoptTabIdx:     0,
+		spinner:         s,
+		createType:      "",
+		createFW:        "",
+		typeCursor:      0,
+		fwCursor:        0,
+		typeOptions:     typeOpts,
+		fwOptions:       fwOpts,
+		currentFwOpts:   fwOpts,
 	}
 }
 
@@ -228,6 +245,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		m.pathInput, cmd = m.pathInput.Update(msg)
 		cmds = append(cmds, cmd)
+		m.adoptNameInput, cmd = m.adoptNameInput.Update(msg)
+		cmds = append(cmds, cmd)
 		m.spinner, cmd = m.spinner.Update(msg)
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
@@ -252,6 +271,8 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleCreateDoneKey(msg)
 	case screenAdopt:
 		return m.handleAdoptKey(msg)
+	case screenAdoptName:
+		return m.handleAdoptNameKey(msg)
 	}
 	return m, nil
 }
@@ -320,6 +341,8 @@ func (m model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchInput.Blur()
 		m.pathInput.SetValue("")
 		m.pathInput.Focus()
+		m.adoptTabMatches = nil
+		m.adoptTabIdx = 0
 		return m, nil
 	case "ctrl+e":
 		if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
@@ -542,16 +565,162 @@ func (m model) handleCreateDoneKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m model) handleAdoptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "tab":
+		return m.completeAdoptPath()
 	case "enter":
 		path := strings.TrimSpace(m.pathInput.Value())
 		if path == "" {
 			return m, nil
 		}
-		// Run adopt synchronously (fast operation)
-		if err := adoptProject(path); err != nil {
-			// Adopt failed; just go back to list
+		// Resolve and validate path, then go to name screen
+		resolved, name, err := resolveAdoptPath(path)
+		if err != nil {
+			// Show error by going back to list — simplified for now
 			m.screen = screenList
 			m.pathInput.Blur()
+			m.searchInput.Focus()
+			return m, nil
+		}
+		m.adoptPath = resolved
+		m.adoptDetectedName = name
+		m.adoptNameInput.SetValue("")
+		m.adoptNameInput.Placeholder = name
+		m.adoptNameInput.Focus()
+		m.pathInput.Blur()
+		m.screen = screenAdoptName
+		return m, nil
+	case "esc":
+		m.screen = screenList
+		m.pathInput.Blur()
+		m.searchInput.Focus()
+		m.adoptTabMatches = nil
+		return m, nil
+	}
+
+	m.adoptTabMatches = nil // reset completion on any other key
+	var cmd tea.Cmd
+	m.pathInput, cmd = m.pathInput.Update(msg)
+	return m, cmd
+}
+
+// ── Path resolution ──────────────────────────────────────────────────────
+
+func resolveAdoptPath(path string) (resolvedPath, name string, err error) {
+	// Expand ~
+	if len(path) > 0 && path[0] == '~' {
+		home, _ := os.UserHomeDir()
+		path = filepath.Join(home, path[1:])
+	}
+
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", "", err
+	}
+
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return "", "", err
+	}
+	if !info.IsDir() {
+		return "", "", fmt.Errorf("not a directory")
+	}
+
+	return absPath, filepath.Base(absPath), nil
+}
+
+// ── Path completion ──────────────────────────────────────────────────────
+
+func (m model) completeAdoptPath() (tea.Model, tea.Cmd) {
+	val := m.pathInput.Value()
+	if val == "" {
+		return m, nil
+	}
+
+	// Normalise bare ~ to ~/
+	if val == "~" {
+		val = "~/"
+	}
+
+	// Expand ~ to home for filesystem ops
+	searchPath := val
+	if len(searchPath) > 0 && searchPath[0] == '~' {
+		home, _ := os.UserHomeDir()
+		searchPath = filepath.Join(home, searchPath[1:])
+	}
+
+	// Determine directory to list and filename prefix
+	endsWithSep := strings.HasSuffix(val, "/") || strings.HasSuffix(val, "\\")
+	var dir, prefix string
+	if endsWithSep {
+		dir = searchPath
+		prefix = ""
+	} else {
+		dir = filepath.Dir(searchPath)
+		prefix = filepath.Base(searchPath)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return m, nil
+	}
+
+	var matches []string
+	for _, e := range entries {
+		name := e.Name()
+		if prefix == "" || strings.HasPrefix(name, prefix) {
+			if e.IsDir() {
+				matches = append(matches, name+"/")
+			} else {
+				matches = append(matches, name)
+			}
+		}
+	}
+	// Sort so Tab gives a predictable result
+	// (os.ReadDir order is filesystem-dependent)
+	sort.Strings(matches)
+
+	if len(matches) == 0 {
+		return m, nil
+	}
+
+	// Use the first match (no cycling — type more chars to narrow)
+	match := matches[0]
+
+	// Build the completed path, preserving ~ prefix in display
+	parent := filepath.Dir(val)
+	var completed string
+	switch {
+	case endsWithSep:
+		completed = val + match
+	case parent == ".":
+		completed = match
+	case parent == "/":
+		completed = "/" + match
+	default:
+		completed = parent + "/" + match
+	}
+
+	m.adoptTabMatches = nil
+	m.adoptTabIdx = 0
+	m.pathInput.SetValue(completed)
+	m.pathInput.SetCursor(len(completed))
+	return m, nil
+}
+
+// ── Screen: Adopt Name ───────────────────────────────────────────────────
+
+func (m model) handleAdoptNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		name := strings.TrimSpace(m.adoptNameInput.Value())
+		if name == "" {
+			// Revert to detected name
+			name = m.adoptDetectedName
+		}
+		if err := adoptProject(m.adoptPath, name); err != nil {
+			// Adopt failed; go back to list
+			m.screen = screenList
+			m.adoptNameInput.Blur()
 			m.searchInput.Focus()
 			projects, _ := loadProjects()
 			m.projects = projects
@@ -559,7 +728,7 @@ func (m model) handleAdoptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.screen = screenList
-		m.pathInput.Blur()
+		m.adoptNameInput.Blur()
 		m.searchInput.Focus()
 		projects, _ := loadProjects()
 		m.projects = projects
@@ -567,13 +736,13 @@ func (m model) handleAdoptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 		return m, nil
 	case "esc":
-		m.screen = screenList
-		m.pathInput.Blur()
-		m.searchInput.Focus()
+		m.screen = screenAdopt
+		m.adoptNameInput.Blur()
+		m.pathInput.Focus()
 		return m, nil
 	}
 
 	var cmd tea.Cmd
-	m.pathInput, cmd = m.pathInput.Update(msg)
+	m.adoptNameInput, cmd = m.adoptNameInput.Update(msg)
 	return m, cmd
 }

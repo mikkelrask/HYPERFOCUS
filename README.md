@@ -76,7 +76,7 @@ Opens a full-terminal list of your registered projects. Type to filter, click or
 | `↑` `↓` | Navigate the list |
 | `Enter` | Open selected project (runs its launch script) |
 | `Ctrl+n` | Create a new project |
-| `Ctrl+a` | Adopt an existing repository |
+| `Ctrl+a` | Adopt an existing repository (path + Tab-completion + optional name) |
 | `Ctrl+e` | Edit selected project's launch script (`$EDITOR`) |
 | `Ctrl+q` / `Ctrl+c` | Quit |
 | `Esc` | Clear search / quit |
@@ -92,6 +92,14 @@ cd ~/Repos/some-project && hf --adopt .
 ```
 
 Registers the repo with Hyperfocus and creates a default launch script at `~/.config/hf/projects/some-project/launch.sh`.
+
+By default the project name is the directory name. Pass `--name` to set a display name:
+
+```bash
+hf --adopt ~/Repos/hf --name Hyperfocus
+```
+
+**Path completion:** Your shell already completes paths for any command, so `hf --adopt ~/Repos/<Tab>` works right out of the box.
 
 ### Create a new project
 

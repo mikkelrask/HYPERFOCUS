@@ -132,7 +132,7 @@ func findProject(name string) (Project, error) {
 
 // ── Adopt (CLI) ──────────────────────────────────────────────────────────
 
-func adoptProject(path string) error {
+func adoptProject(path, name string) error {
 	// Expand ~
 	if len(path) > 0 && path[0] == '~' {
 		home, _ := os.UserHomeDir()
@@ -153,7 +153,10 @@ func adoptProject(path string) error {
 		return fmt.Errorf("%s is not a directory", absPath)
 	}
 
-	name := filepath.Base(absPath)
+	// Use custom name if provided, otherwise derive from directory name
+	if name == "" {
+		name = filepath.Base(absPath)
+	}
 
 	projects, err := loadProjects()
 	if err != nil {
