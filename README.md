@@ -26,6 +26,7 @@ A terminal UI project launcher and scaffolder - browse, create, and switch betwe
 ```bash
 go install github.com/mikkelrask/hyperfocus@latest
 ```
+
 If ~/go/bin is not in your path, you can add it _or_ symlink the binary to a path that is.
 
 ```bash
@@ -36,14 +37,19 @@ ln -s $HOME/go/bin/hyperfocus $HOME/.local/bin/hf
 ```
 
 This lets you invoke it with `hf`
-### Build from source:
+
+### Build from source
+
 It can also be installed by building from source:
+
 ```bash
 git clone https://github.com/mikkelrask/hyperfocus ~/Repos/hf
 cd ~/Repos/hf
 go build -o hf .
 cp hf ~/.local/bin/    # or anywhere on your $PATH
 ```
+
+The binary is standalone — it only needs `~/.config/hf/` at runtime and the external tools listed under Dependencies.
 
 ## Quick start
 
@@ -85,7 +91,7 @@ hf --adopt ~/Repos/some-project
 cd ~/Repos/some-project && hf --adopt .
 ```
 
-Registers the repo with Hyperfocus and creates a default launch script at `~/.hf/projects/some-project/launch.sh`.
+Registers the repo with Hyperfocus and creates a default launch script at `~/.config/hf/projects/some-project/launch.sh`.
 
 ### Create a new project
 
@@ -103,38 +109,80 @@ Press `Ctrl+n` in the TUI and follow the wizard:
 
 Hyperfocus will scaffold the project in `~/Repos/`, run `git init`, and create a launch script you can customise later.
 
-## Per-project launch scripts
+## Launch scripts
 
-Each project gets a shell script at:
+Every project gets a shell script at:
 
 ```
-~/.hf/projects/<name>/launch.sh
+~/.config/hf/projects/<name>/launch.sh
 ```
 
-When you open a project from the TUI, this script runs. The default opens a tmux session with `nvim` in the top pane and a shell in the bottom - the same layout as a classic fzf-based switcher.
+When you open a project from the TUI, this script runs and handles tmux session creation.
 
-Edit the script per project to customise the tmux layout (e.g. open a dev server in a second window, launch tests, etc.). Use `Ctrl+e` inside the TUI to jump straight to the editor.
+### Shared template
+
+New launch scripts are generated from a shared template at:
+
+```
+~/.config/hf/launch-template.sh
+```
+
+Edit this file once and every **future** project will use your custom layout. The default template opens a tmux session with `nvim` in the top pane and a shell in the bottom.
+
+### Per-project overrides
+
+Use `Ctrl+e` inside the TUI to jump straight to the selected project's `launch.sh` in `$EDITOR`. Changes here only affect that one project.
+
+Template placeholders:
+
+| Placeholder | Substituted with |
+|---|---|
+| `{name}` | Project name |
+| `{path}` | Absolute path to the project |
+| `{type}` | Project type description |
 
 ## Data
 
-All Hyperfocus state lives under `~/.hf/`:
+All Hyperfocus state lives under `~/.config/hf/` (or `$XDG_CONFIG_HOME/hf/`):
 
 ```
-~/.hf/
-├── projects.json           # Project registry (JSON)
+~/.config/hf/
+├── config.yaml            # Language / framework definitions (edit to add your own)
+├── launch-template.sh     # Shared launch script template (edit to change defaults)
+├── projects.json          # Project registry (JSON)
 └── projects/
     └── <name>/
-        └── launch.sh        # Per-project launch script
+        └── launch.sh       # Per-project launch script
 ```
 
-## Building
+On first run, `config.yaml` and `launch-template.sh` are created automatically.
 
-```bash
-cd ~/Repos/hf
-go build -o hf .
+## Configuration
+
+### Adding languages and frameworks
+
+Edit `~/.config/hf/config.yaml` to add your own project types and scaffolding commands.
+
+Each language defines:
+
+```yaml
+languages:
+  - name: rust
+    label: Rust
+    detect:           # files to sniff when adopting a repo
+      - Cargo.toml
+    frameworks:
+      - name: cargo
+        label: Cargo
+        create: ["cargo", "init", "{name}"]
+        post_create: []
 ```
 
-The binary is standalone - it only needs `~/.hf/` at runtime and the external tools listed under Dependencies.
+The `detect` list is checked when you run `hf --adopt <path>`. If any of those files exist in the directory, the language is auto-detected.
+
+### Customising the launch template
+
+Edit `~/.config/hf/launch-template.sh` to change the default tmux layout for all future projects. See [Launch scripts](#launch-scripts) above for available placeholders.
 
 ## License
 

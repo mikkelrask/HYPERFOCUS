@@ -126,7 +126,7 @@ func (m model) listView() string {
 	var b strings.Builder
 
 	// Header
-	b.WriteString(titleStyle.Render("🔍 Hyperfocus"))
+	b.WriteString(titleStyle.Render("👻 HYPERFOCUS ON:"))
 	b.WriteString("\n")
 
 	// Search

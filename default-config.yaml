@@ -1,5 +1,5 @@
 # Hyperfocus default configuration.
-# Copy this to ~/.hf/config.yaml and edit to add your own languages/frameworks.
+# Copy this to ~/.config/hf/config.yaml and edit to add your own languages/frameworks.
 # User config is merged with — and overrides — these defaults by language name.
 
 languages:

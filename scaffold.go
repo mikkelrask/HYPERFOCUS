@@ -21,7 +21,7 @@ func scaffoldProject(p Project, cfg *Config) error {
 	// Look up the language in config
 	lang := cfg.FindLanguage(p.Type)
 	if lang == nil {
-		return fmt.Errorf("unknown language %q — check ~/.hf/config.yaml", p.Type)
+		return fmt.Errorf("unknown language %q — check ~/.config/hf/config.yaml", p.Type)
 	}
 
 	// Find the framework (or use first one if none specified)
@@ -115,55 +115,18 @@ func createLaunchScript(p Project) error {
 		desc = cfg.Describe(p.Type, p.Framework)
 	}
 
-	script := fmt.Sprintf(`#!/usr/bin/env bash
-# Hyperfocus launch script
-# Project: %s
-# Type: %s
-# Path: %s
-#
-# ── Customize me! ───────────────────────────────────────────────────
-# This script runs when you open the project from Hyperfocus.
-# Edit the tmux layout below to match your workflow (e.g. additional
-# panes for dev servers, tests, logs, etc.).
+	// Read launch template — user-editable copy or embedded default
+	templatePath := filepath.Join(hfConfigDir(), "launch-template.sh")
+	template, err := os.ReadFile(templatePath)
+	if err != nil {
+		template = defaultLaunchTemplate[:]
+	}
 
-set -e
-
-REPO_DIR="%s"
-SESSION_NAME="%s"
-
-# If the session already exists, just switch to it
-if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
-    if [ -n "$TMUX" ]; then
-        tmux switch-client -t "$SESSION_NAME"
-    else
-        tmux attach-session -t "$SESSION_NAME"
-    fi
-    exit 0
-fi
-
-# ── Create new tmux session ─────────────────────────────────────────
-tmux new-session -s "$SESSION_NAME" -c "$REPO_DIR" -d
-tmux rename-window -t "$SESSION_NAME":1 'main'
-
-# Top pane: open nvim
-tmux send-keys -t "$SESSION_NAME":1.1 'nvim' C-m
-
-# Bottom pane: shell
-tmux split-window -v -t "$SESSION_NAME":1 -c "$REPO_DIR"
-tmux resize-pane -t "$SESSION_NAME":1.1 -y "$(($(tput lines) * 80 / 100))"
-
-# ── Optional: add more panes/windows here ───────────────────────────
-# Example: open a second window with a dev server
-# tmux new-window -t "$SESSION_NAME" -c "$REPO_DIR" -n 'server'
-# tmux send-keys -t "$SESSION_NAME":2 'npm run dev' C-m
-
-# Switch or attach
-if [ -n "$TMUX" ]; then
-    tmux switch-client -t "$SESSION_NAME"
-else
-    tmux attach-session -t "$SESSION_NAME"
-fi
-`, p.Name, desc, p.Path, p.Path, p.Name)
+	// Substitute project values
+	script := string(template)
+	script = strings.ReplaceAll(script, "{name}", p.Name)
+	script = strings.ReplaceAll(script, "{path}", p.Path)
+	script = strings.ReplaceAll(script, "{type}", desc)
 
 	path := projectLaunchScript(p.Name)
 	return os.WriteFile(path, []byte(script), 0755)

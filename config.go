@@ -30,10 +30,13 @@ type Config struct {
 	Languages []LanguageConfig `yaml:"languages"`
 }
 
-// ── Default config embedded ──────────────────────────────────────────────
+// ── Embedded defaults ────────────────────────────────────────────────────
 
 //go:embed default-config.yaml
 var defaultConfigData []byte
+
+//go:embed launch-template.sh
+var defaultLaunchTemplate []byte
 
 // ── Load ─────────────────────────────────────────────────────────────────
 
@@ -45,18 +48,31 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("default config: %w", err)
 	}
 
-	// Merge user config from ~/.hf/config.yaml
-	userPath := filepath.Join(hfConfigDir(), "config.yaml")
-	data, err := os.ReadFile(userPath)
+	// Ensure config dir exists and write default files for discoverability
+	configDir := hfConfigDir()
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return nil, fmt.Errorf("creating config dir: %w", err)
+	}
+
+	// Write default files if missing
+	userPath := filepath.Join(configDir, "config.yaml")
+	userFile, err := os.ReadFile(userPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return &cfg, nil
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("reading %s: %w", userPath, err)
 		}
-		return nil, fmt.Errorf("reading %s: %w", userPath, err)
+		// First run — write defaults so user can edit them
+		_ = os.WriteFile(userPath, defaultConfigData, 0644)
+		userFile = defaultConfigData
+	}
+
+	templatePath := filepath.Join(configDir, "launch-template.sh")
+	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+		_ = os.WriteFile(templatePath, defaultLaunchTemplate, 0755)
 	}
 
 	var userCfg Config
-	if err := yaml.Unmarshal(data, &userCfg); err != nil {
+	if err := yaml.Unmarshal(userFile, &userCfg); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", userPath, err)
 	}
 

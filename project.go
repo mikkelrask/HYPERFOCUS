@@ -21,8 +21,12 @@ type Project struct {
 // ── Path helpers ─────────────────────────────────────────────────────────
 
 func hfConfigDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".hf")
+	configHome := os.Getenv("XDG_CONFIG_HOME")
+	if configHome == "" {
+		home, _ := os.UserHomeDir()
+		configHome = filepath.Join(home, ".config")
+	}
+	return filepath.Join(configHome, "hf")
 }
 
 func projectsFilePath() string {
