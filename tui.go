@@ -112,7 +112,7 @@ func newModel() model {
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#7C3AED"))
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color(colorPurple))
 
 	projects, _ := loadProjects()
 	if projects == nil {

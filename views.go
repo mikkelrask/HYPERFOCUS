@@ -7,30 +7,29 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// ── Kanagawa Colors ─────────────────────────────────────────────────────
+// ── Colors ──────────────────────────────────────────────────────────────
+//
+// ANSI 0-15 indices, not hex: lipgloss/termenv render these with plain SGR
+// codes, so the terminal's own colorscheme resolves the actual RGB values
+// instead of us hardcoding one theme's palette.
 
 const (
-	colorFg     = "#dcd7ba" // foreground
-	colorBg     = "#1f1f28" // background
-	colorCursor = "#c8c093" // cursor, selection foreground
-	colorSelBg  = "#2d4f67" // selection background
-
-	colorBlack    = "#16161d" // palette 0
-	colorRed      = "#c34043" // palette 1
-	colorGreen    = "#76946a" // palette 2
-	colorYellow   = "#c0a36e" // palette 3
-	colorBlue     = "#7e9cd8" // palette 4
-	colorPurple   = "#957fb8" // palette 5
-	colorCyan     = "#6a9589" // palette 6
-	colorWhite    = "#c8c093" // palette 7
-	colorGray     = "#727169" // palette 8 (bright black)
-	colorBrRed    = "#e82424" // palette 9
-	colorBrGreen  = "#98bb6c" // palette 10
-	colorBrYellow = "#e6c384" // palette 11
-	colorBrBlue   = "#7fb4ca" // palette 12
-	colorBrPurple = "#938aa9" // palette 13
-	colorBrCyan   = "#7aa89f" // palette 14
-	colorBrWhite  = "#dcd7ba" // palette 15
+	colorBlack    = "0"
+	colorRed      = "1"
+	colorGreen    = "2"
+	colorYellow   = "3"
+	colorBlue     = "4"
+	colorPurple   = "5"
+	colorCyan     = "6"
+	colorWhite    = "7"
+	colorGray     = "8" // bright black
+	colorBrRed    = "9"
+	colorBrGreen  = "10"
+	colorBrYellow = "11"
+	colorBrBlue   = "12"
+	colorBrPurple = "13"
+	colorBrCyan   = "14"
+	colorBrWhite  = "15"
 )
 
 // ── Styles ───────────────────────────────────────────────────────────────
@@ -42,7 +41,6 @@ var (
 			Padding(0, 1)
 
 	projectNameStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(colorFg)).
 				Bold(true)
 
 	projectDescStyle = lipgloss.NewStyle().
@@ -169,7 +167,7 @@ func (m model) listView() string {
 	}
 
 	// Separator
-	b.WriteString(separatorStyle.Render(strings.Repeat("─", 40)))
+	b.WriteString(separatorStyle.Render(strings.Repeat("-", 40)))
 	b.WriteString("\n")
 
 	// Footer
