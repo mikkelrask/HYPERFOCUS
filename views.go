@@ -267,7 +267,7 @@ func (m model) creatingView() string {
 	if m.createFW != "" {
 		b.WriteString(fmt.Sprintf("  Framework: %s\n", m.config.FrameworkLabel(m.createType, m.createFW)))
 	}
-	b.WriteString(fmt.Sprintf("  Location:  ~/Repos/%s\n", m.createName))
+	b.WriteString(fmt.Sprintf("  Location:  ~/Repos/%s\n", slugify(m.createName)))
 	b.WriteString("\n")
 	b.WriteString(infoStyle.Render("  ⏳ This may take a moment…"))
 	b.WriteString("\n")
@@ -293,9 +293,9 @@ func (m model) createDoneView() string {
 		if m.createdProject.Framework != "" {
 			b.WriteString(fmt.Sprintf("  Framework: %s\n", m.config.FrameworkLabel(m.createdProject.Type, m.createdProject.Framework)))
 		}
-		b.WriteString(fmt.Sprintf("  Location:  ~/Repos/%s\n", m.createdProject.Name))
+		b.WriteString(fmt.Sprintf("  Location:  ~/Repos/%s\n", m.createdProject.Slug))
 		b.WriteString(fmt.Sprintf("  Git:       initialized\n"))
-		b.WriteString(fmt.Sprintf("  Script:    %s\n", projectLaunchScript(m.createdProject.Name)))
+		b.WriteString(fmt.Sprintf("  Script:    %s\n", projectLaunchScript(m.createdProject.Slug)))
 		b.WriteString("\n")
 		b.WriteString(footerStyle.Render("  [Enter] Open project  [Esc] Back to list"))
 	}

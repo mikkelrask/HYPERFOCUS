@@ -16,7 +16,7 @@ func scaffoldProject(p Project, cfg *Config) error {
 		return fmt.Errorf("cannot create ~/Repos: %w", err)
 	}
 
-	projectPath := filepath.Join(repos, p.Name)
+	projectPath := filepath.Join(repos, p.Slug)
 
 	// Look up the language in config
 	lang := cfg.FindLanguage(p.Type)
@@ -39,7 +39,7 @@ func scaffoldProject(p Project, cfg *Config) error {
 
 	// Create / scaffold command
 	if len(fw.Create) > 0 {
-		args := substitute(fw.Create, p.Name, repos, projectPath)
+		args := substitute(fw.Create, p.Slug, repos, projectPath)
 		cmd := exec.Command(args[0], args[1:]...)
 		cmd.Dir = repos
 		cmd.Stdin = nil
@@ -54,7 +54,7 @@ func scaffoldProject(p Project, cfg *Config) error {
 		if len(step) == 0 {
 			continue
 		}
-		args := substitute(step, p.Name, repos, projectPath)
+		args := substitute(step, p.Slug, repos, projectPath)
 		cmd := exec.Command(args[0], args[1:]...)
 		cmd.Dir = projectPath
 		cmd.Stdin = nil
@@ -103,7 +103,7 @@ func runGitInit(projectPath string) error {
 // ── Launch script ────────────────────────────────────────────────────────
 
 func createLaunchScript(p Project) error {
-	dir := projectScriptDir(p.Name)
+	dir := projectScriptDir(p.Slug)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
@@ -163,8 +163,8 @@ if [ -n "$TMUX" ]; then
 else
     tmux attach-session -t "$SESSION_NAME"
 fi
-`, p.Name, desc, p.Path, p.Path, p.Name)
+`, p.Name, desc, p.Path, p.Path, p.Slug)
 
-	path := projectLaunchScript(p.Name)
+	path := projectLaunchScript(p.Slug)
 	return os.WriteFile(path, []byte(script), 0755)
 }

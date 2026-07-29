@@ -348,7 +348,7 @@ func (m model) openSelectedProject() (tea.Model, tea.Cmd) {
 	if m.cursor < 0 || m.cursor >= len(m.filtered) {
 		return m, nil
 	}
-	m.openProject = m.filtered[m.cursor].Name
+	m.openProject = m.filtered[m.cursor].Slug
 	return m, tea.Quit
 }
 
@@ -360,7 +360,7 @@ func (m model) cancelProject() (tea.Model, tea.Cmd) {
 func (m model) editLaunchScript() tea.Cmd {
 	project := m.filtered[m.cursor]
 	return func() tea.Msg {
-		return editFileMsg{path: projectLaunchScript(project.Name)}
+		return editFileMsg{path: projectLaunchScript(project.Slug)}
 	}
 }
 
@@ -373,12 +373,10 @@ func (m model) handleCreateNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if name == "" {
 			return m, nil
 		}
-		// Validate: alphanumeric, hyphens, underscores, dots only
-		for _, r := range name {
-			if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
-				(r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.') {
-				return m, nil // invalid character, ignore
-			}
+		// The name is free-form (e.g. "Open Sauce"); it just needs to
+		// produce a non-empty slug for the underlying directory/session.
+		if slugify(name) == "" {
+			return m, nil
 		}
 		m.createName = name
 		m.screen = screenCreateType
@@ -470,11 +468,13 @@ func (m model) handleCreateFrameworkKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m model) startCreate() (tea.Model, tea.Cmd) {
 	repos := expandPath("~/Repos")
+	slug := slugify(m.createName)
 	project := Project{
 		Name:      m.createName,
+		Slug:      slug,
 		Type:      m.createType,
 		Framework: m.createFW,
-		Path:      filepath.Join(repos, m.createName),
+		Path:      filepath.Join(repos, slug),
 		CreatedAt: time.Now(),
 	}
 
@@ -522,7 +522,7 @@ func (m model) handleCreateDoneKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		if m.createResult == nil && m.createdProject.Name != "" {
-			m.openProject = m.createdProject.Name
+			m.openProject = m.createdProject.Slug
 			return m, tea.Quit
 		}
 		return m, nil

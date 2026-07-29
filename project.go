@@ -5,17 +5,40 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 // ── Types ────────────────────────────────────────────────────────────────
 
 type Project struct {
-	Name      string    `json:"name"`
-	Type      string    `json:"type"`      // language name, e.g. "python", "javascript"
-	Framework string    `json:"framework"` // framework name, e.g. "uv", "vite-react"
+	Name      string    `json:"name"`           // display name, e.g. "Open Sauce"
+	Slug      string    `json:"slug"`           // filesystem/tmux-safe id, e.g. "open-sauce"
+	Type      string    `json:"type"`           // language name, e.g. "python", "javascript"
+	Framework string    `json:"framework"`      // framework name, e.g. "uv", "vite-react"
 	Path      string    `json:"path"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// slugify turns a free-form display name into a filesystem/tmux-safe slug:
+// lowercase alphanumerics separated by single hyphens.
+func slugify(name string) string {
+	name = strings.ToLower(name)
+	var b strings.Builder
+	prevHyphen := true // suppress leading hyphen
+	for _, r := range name {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			prevHyphen = false
+		default:
+			if !prevHyphen {
+				b.WriteByte('-')
+				prevHyphen = true
+			}
+		}
+	}
+	return strings.TrimSuffix(b.String(), "-")
 }
 
 // ── Path helpers ─────────────────────────────────────────────────────────
@@ -72,6 +95,9 @@ func loadProjects() ([]Project, error) {
 		if projects == nil {
 			return []Project{}, nil
 		}
+		if backfillSlugs(projects) {
+			_ = saveProjects(projects)
+		}
 		return projects, nil
 	}
 
@@ -90,6 +116,7 @@ func loadProjects() ([]Project, error) {
 	for _, l := range legacy {
 		projects = append(projects, Project{
 			Name:      l.Name,
+			Slug:      slugify(l.Name),
 			Type:      legacyTypeMap[l.Type],
 			Framework: legacyFwMap[l.Framework],
 			Path:      l.Path,
@@ -100,6 +127,19 @@ func loadProjects() ([]Project, error) {
 	// Persist migrated data
 	_ = saveProjects(projects)
 	return projects, nil
+}
+
+// backfillSlugs fills in Slug for projects saved before the Slug field
+// existed. Returns true if any project was changed.
+func backfillSlugs(projects []Project) bool {
+	changed := false
+	for i := range projects {
+		if projects[i].Slug == "" {
+			projects[i].Slug = slugify(projects[i].Name)
+			changed = true
+		}
+	}
+	return changed
 }
 
 func saveProjects(projects []Project) error {
@@ -150,13 +190,14 @@ func adoptProject(path string) error {
 	}
 
 	name := filepath.Base(absPath)
+	slug := slugify(name)
 
 	projects, err := loadProjects()
 	if err != nil {
 		return err
 	}
 	for _, p := range projects {
-		if p.Name == name {
+		if p.Name == name || p.Slug == slug {
 			return fmt.Errorf("project %q already exists in hyperfocus", name)
 		}
 		if p.Path == absPath {
@@ -173,6 +214,7 @@ func adoptProject(path string) error {
 
 	project := Project{
 		Name:      name,
+		Slug:      slugify(name),
 		Type:      lang,
 		Framework: "",
 		Path:      absPath,
